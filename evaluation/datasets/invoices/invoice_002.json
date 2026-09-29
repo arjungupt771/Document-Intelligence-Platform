@@ -1,0 +1,9 @@
+{
+  "document": "invoice_002.pdf",
+  "document_type": "invoice",
+  "ground_truth": {
+    "vendor": "Globex Corporation",
+    "invoice_number": "INV-2048",
+    "total": 125000
+  }
+}

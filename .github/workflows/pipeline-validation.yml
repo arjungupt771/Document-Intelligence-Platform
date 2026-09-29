@@ -1,0 +1,30 @@
+name: End-to-end pipeline validation
+
+on:
+  schedule:
+    - cron: "0 4 * * *"  # nightly
+  workflow_dispatch: {}
+
+jobs:
+  full-pipeline-dry-run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image (no push)
+        run: docker build -t doc-intel:pipeline-check .
+      - name: Boot full stack
+        run: |
+          cp .env.example .env
+          echo "API_AUTH_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')" >> .env
+          docker compose up -d --wait
+      - name: Run migrations against fresh stack
+        run: docker compose exec -T api alembic upgrade head
+      - name: Init Qdrant collection
+        run: docker compose exec -T api python scripts/init_qdrant_collection.py
+      - name: Smoke test
+        env:
+          SMOKE_TEST_URL: http://localhost:8000
+        run: docker compose exec -T -e SMOKE_TEST_URL -e API_AUTH_KEY api python scripts/smoke_test.py
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

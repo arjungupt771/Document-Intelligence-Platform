@@ -1,0 +1,36 @@
+services:
+  api:
+    image: document-intelligence:${IMAGE_TAG:-local}
+    build: .
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 1G }
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  postgres:
+    deploy:
+      resources:
+        limits: { cpus: "2.0", memory: 2G }
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    secrets:
+      - metrics_auth_key
+    restart: unless-stopped
+
+volumes:
+  prometheus_data:
+
+secrets:
+  metrics_auth_key:
+    file: ./secrets/metrics_auth_key

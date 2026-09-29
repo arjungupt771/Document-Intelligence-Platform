@@ -1,0 +1,9 @@
+{
+  "document": "invoice_001.pdf",
+  "document_type": "invoice",
+  "ground_truth": {
+    "vendor": "ACME Corporation",
+    "invoice_number": "INV-1042",
+    "total": 354000
+  }
+}

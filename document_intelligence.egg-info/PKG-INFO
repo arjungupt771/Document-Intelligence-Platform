@@ -1,0 +1,26 @@
+Metadata-Version: 2.4
+Name: document-intelligence
+Version: 0.1.0
+Requires-Python: >=3.11
+Requires-Dist: fastapi
+Requires-Dist: uvicorn
+Requires-Dist: python-dotenv
+Requires-Dist: python-multipart
+Requires-Dist: pymupdf
+Requires-Dist: python-docx
+Requires-Dist: sqlalchemy>=2.0
+Requires-Dist: psycopg2-binary
+Requires-Dist: alembic
+Requires-Dist: qdrant-client==1.11.0
+Requires-Dist: sentence-transformers
+Requires-Dist: httpx
+Requires-Dist: prometheus-client
+Requires-Dist: redis>=5.0
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: pytest-cov; extra == "dev"
+Requires-Dist: httpx; extra == "dev"
+Requires-Dist: pip-audit; extra == "dev"
+Requires-Dist: bandit; extra == "dev"
+Requires-Dist: ruff; extra == "dev"
+Requires-Dist: mypy; extra == "dev"

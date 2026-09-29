@@ -1,0 +1,74 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["Build & Push Image"]
+    types: [completed]
+
+jobs:
+  deploy-staging:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to staging host
+        env:
+          IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
+          DEPLOY_HOST: ${{ secrets.STAGING_HOST }}
+          SSH_KEY: ${{ secrets.STAGING_SSH_KEY }}
+        run: |
+          echo "$SSH_KEY" > deploy_key && chmod 600 deploy_key
+          ssh -i deploy_key -o StrictHostKeyChecking=no deploy@$DEPLOY_HOST '
+            cd /opt/document-intelligence &&
+            export IMAGE_TAG='"$IMAGE_TAG"' &&
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml pull api &&
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm --no-deps api alembic upgrade head &&
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm --no-deps api python scripts/init_qdrant_collection.py &&
+            docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-deps --wait api
+          '
+      - name: Smoke test staging
+        env:
+          SMOKE_TEST_URL: https://staging.example.com
+          API_AUTH_KEY: ${{ secrets.STAGING_API_AUTH_KEY }}
+        run: python scripts/smoke_test.py
+
+  deploy-production:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: production   # requires manual approval — configure a required reviewer on this GitHub Environment
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to production host
+        env:
+          IMAGE_TAG: ${{ github.event.workflow_run.head_sha }}
+          DEPLOY_HOST: ${{ secrets.PROD_HOST }}
+          SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
+        run: |
+          echo "$SSH_KEY" > deploy_key && chmod 600 deploy_key
+          ssh -i deploy_key -o StrictHostKeyChecking=no deploy@$DEPLOY_HOST '
+          cd /opt/document-intelligence &&
+          export IMAGE_TAG='"$IMAGE_TAG"' &&
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml pull api &&
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm --no-deps api alembic upgrade head &&
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml run --rm --no-deps api python scripts/init_qdrant_collection.py &&
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --no-deps --wait api
+          '
+      - name: Smoke test production
+        env:
+          SMOKE_TEST_URL: https://api.example.com
+          API_AUTH_KEY: ${{ secrets.PROD_API_AUTH_KEY }}
+        run: python scripts/smoke_test.py
+      - name: Rollback on smoke test failure
+        if: failure()
+        env:
+           DEPLOY_HOST: ${{ secrets.PROD_HOST }}
+           SSH_KEY: ${{ secrets.PROD_SSH_KEY }}
+           API_AUTH_KEY: ${{ secrets.PROD_API_AUTH_KEY }}
+        run: |
+          echo "$SSH_KEY" > deploy_key && chmod 600 deploy_key
+          ssh -i deploy_key -o StrictHostKeyChecking=no deploy@$DEPLOY_HOST \
+            "cd /opt/document-intelligence && \
+            SMOKE_TEST_URL='https://api.example.com' \
+            API_AUTH_KEY='$API_AUTH_KEY' \
+            bash scripts/rollback.sh"
